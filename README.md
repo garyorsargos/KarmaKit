@@ -20,6 +20,70 @@ A flexible and extensible karma/reputation system for Node.js applications.
 npm install karma-kit
 ```
 
+## Quick Start
+
+Here's a simple example to get you started:
+
+```typescript
+import { KarmaKit } from 'karma-kit';
+
+// Create a new KarmaKit instance with basic configuration
+const karmaKit = new KarmaKit({
+  // Start users with 0 points
+  initialScore: 0,
+  
+  // Define a simple action type
+  actionTypes: {
+    like: { baseScore: 1 },
+    dislike: { baseScore: -1 }
+  },
+  
+  // Define basic trust levels
+  trustLevels: [
+    { 
+      name: 'Newcomer',
+      minScore: 0,
+      actionWeight: 1,
+      decayRate: 0,
+      badge: '🌱',
+      privileges: ['basic_access']
+    },
+    { 
+      name: 'Trusted',
+      minScore: 10,
+      actionWeight: 1,
+      decayRate: 0,
+      badge: '⭐',
+      privileges: ['basic_access', 'advanced_access']
+    }
+  ]
+});
+
+// Example: Track a user's action
+async function example() {
+  // User likes a post
+  const result = await karmaKit.trackUserAction({
+    userId: 'user123',
+    action: 'like',
+    targetId: 'post456'
+  });
+
+  console.log('User score:', result.score);
+  console.log('Trust level:', result.trustLevel.name);
+  console.log('Badge:', result.trustLevel.badge);
+}
+
+// Run the example
+example();
+```
+
+This will output something like:
+```
+User score: 1
+Trust level: Newcomer
+Badge: 🌱
+```
+
 ## Configuration
 
 Create a `.env` file in your project root with the following variables:
