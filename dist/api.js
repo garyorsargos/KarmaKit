@@ -55,21 +55,11 @@ class KarmaKitAPI {
                 res.status(500).json({ error: 'Internal server error' });
             }
         });
-        // Get leaderboard
-        this.app.get('/leaderboard', async (req, res) => {
-            try {
-                const leaderboard = await this.karmaKit.getLeaderboard();
-                res.json(leaderboard);
-            }
-            catch (error) {
-                res.status(500).json({ error: 'Internal server error' });
-            }
-        });
         // Update user trust level
         this.app.put('/user/:userId/trust', async (req, res) => {
             try {
                 const { userId } = req.params;
-                const { trustLevel, decayRate } = req.body;
+                const { trustLevel } = req.body;
                 const userScore = await this.karmaKit.getUserScore(userId);
                 if (!userScore) {
                     return res.status(404).json({ error: 'User not found' });
@@ -77,8 +67,7 @@ class KarmaKitAPI {
                 // Update trust level configuration
                 const updatedTrustLevel = {
                     ...userScore.trustLevel,
-                    ...trustLevel,
-                    decayRate: decayRate !== null && decayRate !== void 0 ? decayRate : userScore.trustLevel.decayRate
+                    ...trustLevel
                 };
                 // Save updated trust level
                 await this.karmaKit.updateTrustLevel(userId, updatedTrustLevel);

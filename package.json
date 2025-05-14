@@ -4,6 +4,10 @@
   "description": "A flexible and extensible karma/reputation system for Node.js applications",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
@@ -17,17 +21,32 @@
     "prisma:studio": "prisma studio",
     "db:init": "ts-node scripts/init-db.ts",
     "db:migrate": "ts-node scripts/migrate.ts",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run lint",
+    "preversion": "npm run lint",
+    "version": "npm run format && git add -A src",
+    "postversion": "git push && git push --tags"
   },
   "keywords": [
     "karma",
     "reputation",
     "trust",
     "scoring",
-    "leaderboard"
+    "leaderboard",
+    "gamification",
+    "user-reputation",
+    "trust-system"
   ],
-  "author": "",
+  "author": "Gary Orsargos",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/garyorsargos/KarmaKit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/garyorsargos/KarmaKit/issues"
+  },
+  "homepage": "https://github.com/garyorsargos/KarmaKit#readme",
   "dependencies": {
     "@prisma/client": "^5.10.0",
     "dotenv": "^16.4.5",
@@ -48,5 +67,11 @@
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

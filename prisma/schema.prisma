@@ -34,6 +34,9 @@ model Score {
   totalActions    Int       @default(0)
   actionCounts    Json      @default("{}")
   lastActivity    DateTime  @default(now())
+
+  @@index([value])
+  @@index([lastActivity])
 }
 
 model Action {
@@ -45,6 +48,9 @@ model Action {
   metadata    Json?
   timestamp   DateTime  @default(now())
   scoreChange Float
+
+  @@index([userId, timestamp])
+  @@index([type, timestamp])
 }
 
 model Event {
@@ -54,6 +60,9 @@ model Event {
   type        String    // 'action' | 'score_change' | 'trust_change' | 'decay' | 'custom'
   timestamp   DateTime  @default(now())
   data        Json
+
+  @@index([userId, timestamp])
+  @@index([type, timestamp])
 }
 
 model TrustLevel {
@@ -61,24 +70,7 @@ model TrustLevel {
   name        String    @unique
   minScore    Float
   actionWeight Float    @default(1)
-  decayRate   Float     @default(0)
   badge       String?
   privileges  String[]
   users       User[]
-}
-
-// Indexes for better query performance
-model Action {
-  @@index([userId, timestamp])
-  @@index([type, timestamp])
-}
-
-model Event {
-  @@index([userId, timestamp])
-  @@index([type, timestamp])
-}
-
-model Score {
-  @@index([value])
-  @@index([lastActivity])
 }

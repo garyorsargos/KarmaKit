@@ -1,18 +1,15 @@
-# Karma-Kit
+# KarmaKit
 
-A flexible and extensible karma/reputation system for Node.js applications.
+KarmaKit is a flexible, extensible user reputation and trust system for Node.js applications. It tracks user actions, updates scores, manages trust levels, and provides event logging, rate limiting, and leaderboard features.
 
 ## Features
 
-- User karma scoring and trust levels
-- Configurable action types and weights
-- Rate limiting and score decay
-- Event logging and history
-- Leaderboard functionality
-- Real-time updates via events
-- PostgreSQL database integration
-- Redis caching for performance
-- RESTful API endpoints
+- **User Scoring:** Track and update user scores based on configurable actions.
+- **Trust Levels:** Define custom trust levels with score thresholds and action weights.
+- **Rate Limiting:** Prevent abuse by limiting the number of actions per user in a time window.
+- **Event Logging:** Log user actions and trust level changes for auditing and analytics.
+- **Leaderboard:** Display top users based on score, with configurable filters.
+- **API Endpoints:** RESTful API for interacting with user karma, trust levels, and history.
 
 ## Installation
 
@@ -44,7 +41,6 @@ const karmaKit = new KarmaKit({
       name: 'Newcomer',
       minScore: 0,
       actionWeight: 1,
-      decayRate: 0,
       badge: '🌱',
       privileges: ['basic_access']
     },
@@ -52,7 +48,6 @@ const karmaKit = new KarmaKit({
       name: 'Trusted',
       minScore: 10,
       actionWeight: 1,
-      decayRate: 0,
       badge: '⭐',
       privileges: ['basic_access', 'advanced_access']
     }
@@ -123,17 +118,10 @@ const karmaKit = new KarmaKit({
     timeWindow: 3600000 // 1 hour
   },
   trustLevels: [
-    { name: 'Newcomer', minScore: -Infinity, actionWeight: 0.5, decayRate: 0.5 },
-    { name: 'Contributor', minScore: 0, actionWeight: 1, decayRate: 0.2 },
-    { name: 'Trusted', minScore: 50, actionWeight: 1.5, decayRate: 0.1 },
-    { name: 'Expert', minScore: 100, actionWeight: 2, decayRate: 0 }
+    { name: 'Newcomer', minScore: 0, actionWeight: 1, badge: '🌱', privileges: ['basic_access'] },
+    { name: 'Contributor', minScore: 2, actionWeight: 1.2, badge: '🎖️', privileges: ['basic_access', 'post'] },
+    { name: 'Trusted', minScore: 5, actionWeight: 1.5, badge: '⭐', privileges: ['basic_access', 'post', 'vote'] }
   ],
-  scoreDecay: {
-    enabled: true,
-    baseRate: 0.1,
-    minScore: 0,
-    maxRate: 1
-  },
   leaderboard: {
     size: 10,
     timeWindow: 0,
@@ -167,9 +155,6 @@ const events = await karmaKit.getUserEvents('user123', {
   startTime: Date.now() - 86400000 // Last 24 hours
 });
 
-// Apply score decay (should be called periodically)
-await karmaKit.applyScoreDecay();
-
 // Clean up resources
 await karmaKit.close();
 ```
@@ -184,41 +169,55 @@ await karmaKit.close();
 
 ## Events
 
-The KarmaKit class extends EventEmitter and emits the following events:
+- `score:updated` — User's score was updated
+- `action:tracked` — User action was tracked
+- `trust:updated` — User's trust level was updated
+- `event:logged` — An event was logged
 
-- `score:updated` - When a user's score changes
-- `action:tracked` - When a new action is tracked
-- `trust:updated` - When a user's trust level changes
-- `event:logged` - When a new event is logged
-- `decay:applied` - When score decay is applied
-- `leaderboard:updated` - When the leaderboard is updated
+## Configuration Reference
+
+- **initialScore**: Starting score for new users
+- **maxScore / minScore**: Score boundaries
+- **actionTypes**: Map of action names to base scores
+- **enableRateLimiting**: Enable/disable rate limiting
+- **rateLimit**: { maxActions, timeWindow } per user
+- **trustLevels**: Array of trust level configs (name, minScore, actionWeight, badge, privileges)
+- **leaderboard**: { size, timeWindow, includeInactive, minActivity }
+- **eventLogging**: { enabled, maxEvents, retentionPeriod }
+
+## Running Tests
+
+To run the test suite:
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+2. **Set up environment variables:**
+   - You can use the provided `.env.example` as a template:
+     ```bash
+     cp .env.example .env
+     ```
+   - For most tests, the default values will work. The test suite uses in-memory mocks for the database and cache, so you do **not** need a running PostgreSQL or Redis instance (or Docker containers) for basic tests.
+3. **Run the tests:**
+   ```bash
+   npm test
+   ```
+
+> **Note:**
+> You only need PostgreSQL and Redis running (e.g., via Docker) if you want to run the full application or add integration tests that use real services. For the default test suite, containers are not required.
+
+If you encounter issues, ensure your Node.js version matches the project's requirements and that your dependencies are up to date.
+
+## Final Notes
+
+- All decay-related functionality has been removed.
+- Trust levels and scoring are fully customizable.
+- The system is extensible for additional features as needed.
 
 ## Database Schema
 
 The application uses PostgreSQL with the following schema:
 
 - `User` - User information and scores
-- `Score` - User score history
-- `Action` - Recorded user actions
-- `Event` - System events
-- `TrustLevel` - Trust level definitions
-
-## Caching
-
-Redis is used for caching:
-- User scores
-- Leaderboard data
-- Trust level configurations
-
-## Development
-
-1. Clone the repository
-2. Install dependencies: `npm install`
-3. Set up PostgreSQL and Redis
-4. Create a `.env` file based on `.env.example`
-5. Run tests: `npm test`
-6. Start development server: `npm run dev`
-
-## License
-
-MIT 
+- `

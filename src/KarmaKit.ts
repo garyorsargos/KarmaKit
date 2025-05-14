@@ -7,8 +7,7 @@ import {
   TrustLevel,
   TrustLevelConfig,
   ActionConfig,
-  KarmaEvent,
-  LeaderboardEntry
+  KarmaEvent
 } from './types';
 import { DatabaseService } from './services/DatabaseService';
 import { CacheService } from './services/CacheService';
@@ -19,18 +18,22 @@ export class KarmaKit extends EventEmitter {
   private db: DatabaseService;
   private cache: CacheService;
   private defaultTrustLevels: TrustLevelConfig[] = [
-    { name: 'Newcomer', minScore: -Infinity, actionWeight: 0.5, decayRate: 0.5 },
-    { name: 'Contributor', minScore: 0, actionWeight: 1, decayRate: 0.2 },
-    { name: 'Trusted', minScore: 50, actionWeight: 1.5, decayRate: 0.1 },
-    { name: 'Expert', minScore: 100, actionWeight: 2, decayRate: 0 }
+    { name: 'Newcomer', minScore: -Infinity, actionWeight: 0.5 },
+    { name: 'Contributor', minScore: 0, actionWeight: 1 },
+    { name: 'Trusted', minScore: 50, actionWeight: 1.5 },
+    { name: 'Expert', minScore: 100, actionWeight: 2 }
   ];
 
-  constructor(config: KarmaKitConfig = {}) {
+  constructor(
+    config: KarmaKitConfig = {},
+    db?: DatabaseService,
+    cache?: CacheService
+  ) {
     super();
     this.config = {
       initialScore: config.initialScore ?? 0,
       maxScore: config.maxScore ?? Infinity,
-      minScore: config.minScore ?? -Infinity,
+      minScore: config.minScore ?? 0,
       actionTypes: config.actionTypes ?? {
         upvote: { baseScore: 1 },
         downvote: { baseScore: -1 },
@@ -43,12 +46,6 @@ export class KarmaKit extends EventEmitter {
         timeWindow: config.rateLimit?.timeWindow ?? 3600000 // 1 hour
       },
       trustLevels: config.trustLevels ?? this.defaultTrustLevels,
-      scoreDecay: {
-        enabled: config.scoreDecay?.enabled ?? false,
-        baseRate: config.scoreDecay?.baseRate ?? 0,
-        minScore: config.scoreDecay?.minScore ?? 0,
-        maxRate: config.scoreDecay?.maxRate ?? Infinity
-      },
       leaderboard: {
         size: config.leaderboard?.size ?? 10,
         timeWindow: config.leaderboard?.timeWindow ?? 0,
@@ -63,8 +60,8 @@ export class KarmaKit extends EventEmitter {
     };
 
     this.actionCounts = new Map();
-    this.db = new DatabaseService();
-    this.cache = new CacheService();
+    this.db = db ?? new DatabaseService();
+    this.cache = cache ?? new CacheService();
 
     // Initialize trust levels in database
     this.db.initializeTrustLevels(this.config.trustLevels).catch(console.error);
@@ -76,43 +73,29 @@ export class KarmaKit extends EventEmitter {
   async trackUserAction(action: UserAction): Promise<UserScore> {
     const { userId, action: actionType } = action;
 
+    // Get current user score or create new one
+    let userScore = await this.getUserScore(userId);
+    if (!userScore) {
+      userScore = this.createInitialUserScore(userId);
+    }
+
     // Check rate limiting
     if (this.config.enableRateLimiting) {
-      const actionCount = this.actionCounts.get(userId) ?? 0;
-      if (actionCount >= (this.config.rateLimit?.maxActions ?? 100)) {
+      const actionCount = this.actionCounts.get(userId) || 0;
+      if (actionCount >= this.config.rateLimit.maxActions) {
         throw new Error('Rate limit exceeded');
       }
       this.actionCounts.set(userId, actionCount + 1);
     }
 
-    // Get user score from cache or database
-    let userScore = await this.cache.getUserScore(userId);
-    if (!userScore) {
-      userScore = await this.db.getUserScore(userId) ?? this.createInitialUserScore(userId);
-    }
-
-    // Get action configuration
-    const actionConfig = this.config.actionTypes[actionType];
-    if (!actionConfig) {
-      throw new Error(`Unknown action type: ${actionType}`);
-    }
-
-    // Validate action if custom validator exists
-    if (actionConfig.validate && !(await actionConfig.validate(action, userScore))) {
-      throw new Error('Action validation failed');
-    }
-
     // Calculate score change
-    const scoreChange = actionConfig.calculateScore
-      ? await actionConfig.calculateScore(action, userScore)
-      : this.calculateWeightedScore(actionConfig, userScore, action);
-
+    const scoreChange = this.calculateWeightedScore(action, userScore.trustLevel);
     const newScore = Math.min(
       Math.max(userScore.score + scoreChange, this.config.minScore),
       this.config.maxScore
     );
 
-    // Get new trust level
+    // Check for trust level change
     const newTrustLevel = this.calculateTrustLevel(newScore);
     const trustLevelChanged = newTrustLevel.name !== userScore.trustLevel.name;
 
@@ -146,13 +129,12 @@ export class KarmaKit extends EventEmitter {
       this.cache.setUserScore(userId, updatedScore)
     ]);
 
-    // Invalidate leaderboard cache
-    await this.cache.invalidateLeaderboard();
-
     // Emit events
     this.emit('score:updated', userId, newScore);
     this.emit('action:tracked', action);
-    this.emit('trust:updated', userId, updatedScore.trustLevel);
+    if (trustLevelChanged) {
+      this.emit('trust:updated', userId, updatedScore.trustLevel);
+    }
     this.emit('event:logged', updatedScore.events[updatedScore.events.length - 1]);
 
     return updatedScore;
@@ -180,84 +162,31 @@ export class KarmaKit extends EventEmitter {
   /**
    * Get user's event history
    */
-  async getUserEvents(userId: string, options: {
-    type?: KarmaEvent['type'];
-    startTime?: number;
-    endTime?: number;
-  } = {}): Promise<KarmaEvent[]> {
-    return this.db.getUserEvents(userId, options);
-  }
-
-  /**
-   * Get current leaderboard
-   */
-  async getLeaderboard(): Promise<LeaderboardEntry[]> {
-    // Try cache first
-    const cachedLeaderboard = await this.cache.getLeaderboard();
-    if (cachedLeaderboard) return cachedLeaderboard;
-
-    // Fall back to database
-    const leaderboard = await this.db.getLeaderboard({
-      limit: this.config.leaderboard?.size ?? 10,
-      timeWindow: this.config.leaderboard?.timeWindow ?? 0,
-      minActivity: this.config.leaderboard?.minActivity ?? 0,
-      includeInactive: this.config.leaderboard?.includeInactive ?? true
+  async getUserEvents(
+    userId: string,
+    options: {
+      type?: KarmaEvent['type'];
+      startTime?: number;
+      endTime?: number;
+    } = {}
+  ): Promise<KarmaEvent[]> {
+    const { type, startTime, endTime } = options;
+    
+    // Get events from database
+    const events = await this.db.getUserEvents(userId, {
+      type,
+      startTime,
+      endTime
     });
 
-    // Cache for future requests
-    await this.cache.setLeaderboard(leaderboard);
-
-    return leaderboard;
-  }
-
-  /**
-   * Apply score decay to all users
-   * Should be called periodically (e.g., daily)
-   */
-  async applyScoreDecay(): Promise<void> {
-    if (!this.config.scoreDecay?.enabled) return;
-
-    const now = Date.now();
-    const userScores = await this.db.getLeaderboard({ includeInactive: true });
-
-    for (const { userId } of userScores) {
-      const userScore = await this.getUserScore(userId);
-      if (!userScore) continue;
-
-      const daysSinceLastUpdate = (now - userScore.lastUpdated) / (1000 * 60 * 60 * 24);
-      if (daysSinceLastUpdate < 1) continue;
-
-      const decayAmount = this.calculateDecayAmount(userScore, daysSinceLastUpdate);
-      if (decayAmount === 0) continue;
-
-      const newScore = Math.max(userScore.score - decayAmount, this.config.minScore);
-      const updatedScore: UserScore = {
-        ...userScore,
-        score: newScore,
-        trustLevel: this.calculateTrustLevel(newScore),
-        lastUpdated: now,
-        events: this.updateEvents(userScore.events, {
-          type: 'decay',
-          timestamp: now,
-          data: { decayAmount }
-        })
-      };
-
-      // Save to database and cache
-      await Promise.all([
-        this.db.createOrUpdateUserScore(userId, updatedScore),
-        this.cache.setUserScore(userId, updatedScore)
-      ]);
-
-      // Invalidate leaderboard cache
-      await this.cache.invalidateLeaderboard();
-
-      // Emit events
-      this.emit('decay:applied', userId, decayAmount);
-      this.emit('score:updated', userId, newScore);
-      this.emit('trust:updated', userId, updatedScore.trustLevel);
-      this.emit('event:logged', updatedScore.events[updatedScore.events.length - 1]);
+    // Apply max events limit if configured
+    let filteredEvents = events;
+    if (this.config.eventLogging?.maxEvents) {
+      filteredEvents = events.slice(-this.config.eventLogging.maxEvents);
     }
+
+    // Sort events by timestamp in descending order
+    return filteredEvents.sort((a, b) => b.timestamp - a.timestamp);
   }
 
   /**
@@ -283,26 +212,21 @@ export class KarmaKit extends EventEmitter {
     };
   }
 
-  private calculateWeightedScore(
-    actionConfig: ActionConfig,
-    userScore: UserScore,
-    action: UserAction
-  ): number {
-    const weights = actionConfig.weights ?? {};
-    const trustLevelWeight = weights.trustLevel ?? 1;
-    const activityHistoryWeight = weights.activityHistory ?? 1;
-    const contentImportanceWeight = weights.contentImportance ?? 1;
+  private calculateWeightedScore(action: UserAction, trustLevel: TrustLevel): number {
+    const actionConfig = this.config.actionTypes[action.action];
+    if (!actionConfig) return 0;
 
-    const contentImportance = action.metadata?.contentImportance ?? 5;
-    const normalizedContentImportance = contentImportance / 10; // Normalize to 0-1
+    let score = actionConfig.baseScore;
+    
+    // Apply trust level weight
+    score *= trustLevel.actionWeight;
 
-    return (
-      actionConfig.baseScore *
-      userScore.trustLevel.actionWeight *
-      trustLevelWeight *
-      activityHistoryWeight *
-      (1 + normalizedContentImportance * contentImportanceWeight)
-    );
+    // Apply content importance if specified
+    if (action.metadata?.contentImportance) {
+      score *= (action.metadata.contentImportance + 1);
+    }
+
+    return score;
   }
 
   private calculateTrustLevel(score: number): TrustLevel {
@@ -315,7 +239,6 @@ export class KarmaKit extends EventEmitter {
         name: 'Newcomer',
         minScore: -Infinity,
         actionWeight: 0.5,
-        decayRate: 0.5,
         badge: '🌱',
         privileges: ['basic_access']
       };
@@ -325,24 +248,9 @@ export class KarmaKit extends EventEmitter {
       name: trustLevel.name,
       minScore: trustLevel.minScore,
       actionWeight: trustLevel.actionWeight,
-      decayRate: trustLevel.decayRate,
       badge: trustLevel.badge ?? '⭐',
       privileges: trustLevel.privileges ?? ['basic_access']
     };
-  }
-
-  private calculateDecayAmount(userScore: UserScore, daysSinceLastUpdate: number): number {
-    if (!this.config.scoreDecay?.enabled) return 0;
-
-    const { baseRate, minScore, maxRate } = this.config.scoreDecay;
-    if (userScore.score <= minScore) return 0;
-
-    const decayRate = Math.min(
-      userScore.trustLevel.decayRate * baseRate,
-      maxRate
-    );
-
-    return Math.floor(decayRate * daysSinceLastUpdate);
   }
 
   private updateActivityHistory(
@@ -359,17 +267,22 @@ export class KarmaKit extends EventEmitter {
     };
   }
 
-  private updateEvents(currentEvents: KarmaEvent[], newEvent: KarmaEvent): KarmaEvent[] {
-    const events = [...currentEvents, newEvent];
-
+  private updateEvents(events: KarmaEvent[], newEvent: KarmaEvent): KarmaEvent[] {
+    const updatedEvents = [...events, newEvent];
+    
     // Apply retention period if configured
-    if ((this.config.eventLogging?.retentionPeriod ?? 0) > 0) {
-      const cutoffTime = Date.now() - (this.config.eventLogging?.retentionPeriod ?? 0);
-      return events.filter(event => event.timestamp > cutoffTime);
+    if (this.config.eventLogging?.retentionPeriod) {
+      const cutoffTime = Date.now() - this.config.eventLogging.retentionPeriod;
+      return updatedEvents.filter(event => event.timestamp >= cutoffTime);
     }
-
-    // Apply max events limit
-    return events.slice(-(this.config.eventLogging?.maxEvents ?? 1000));
+    
+    // Apply max events limit if configured
+    if (this.config.eventLogging?.maxEvents) {
+      const maxEvents = this.config.eventLogging.maxEvents;
+      return updatedEvents.slice(-maxEvents);
+    }
+    
+    return updatedEvents;
   }
 
   async close(): Promise<void> {
@@ -405,9 +318,6 @@ export class KarmaKit extends EventEmitter {
       this.db.createOrUpdateUserScore(userId, updatedScore),
       this.cache.setUserScore(userId, updatedScore)
     ]);
-
-    // Invalidate leaderboard cache
-    await this.cache.invalidateLeaderboard();
 
     // Emit events
     this.emit('trust:updated', userId, trustLevel);

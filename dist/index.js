@@ -21,17 +21,11 @@ async function main() {
                 timeWindow: 3600000 // 1 hour
             },
             trustLevels: [
-                { name: 'Newcomer', minScore: -Infinity, actionWeight: 0.5, decayRate: 0.5 },
-                { name: 'Contributor', minScore: 0, actionWeight: 1, decayRate: 0.2 },
-                { name: 'Trusted', minScore: 50, actionWeight: 1.5, decayRate: 0.1 },
-                { name: 'Expert', minScore: 100, actionWeight: 2, decayRate: 0 }
+                { name: 'Newcomer', minScore: -Infinity, actionWeight: 0.5 },
+                { name: 'Contributor', minScore: 0, actionWeight: 1 },
+                { name: 'Trusted', minScore: 50, actionWeight: 1.5 },
+                { name: 'Expert', minScore: 100, actionWeight: 2 }
             ],
-            scoreDecay: {
-                enabled: true,
-                baseRate: 0.1,
-                minScore: 0,
-                maxRate: 1
-            },
             leaderboard: {
                 size: 10,
                 timeWindow: 0,
@@ -48,15 +42,6 @@ async function main() {
         const api = new api_1.KarmaKitAPI(karmaKit);
         // Start API server
         api.start();
-        // Set up periodic score decay
-        setInterval(async () => {
-            try {
-                await karmaKit.applyScoreDecay();
-            }
-            catch (error) {
-                console.error('Error applying score decay:', error);
-            }
-        }, 24 * 60 * 60 * 1000); // Run daily
         // Handle graceful shutdown
         process.on('SIGTERM', async () => {
             console.log('Shutting down...');

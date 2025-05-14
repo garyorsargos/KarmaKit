@@ -1,12 +1,14 @@
 import { EventEmitter } from 'events';
-import { KarmaKitConfig, UserAction, UserScore, TrustLevel, KarmaEvent, LeaderboardEntry } from './types';
+import { KarmaKitConfig, UserAction, UserScore, TrustLevel, KarmaEvent } from './types';
+import { DatabaseService } from './services/DatabaseService';
+import { CacheService } from './services/CacheService';
 export declare class KarmaKit extends EventEmitter {
     private config;
     private actionCounts;
     private db;
     private cache;
     private defaultTrustLevels;
-    constructor(config?: KarmaKitConfig);
+    constructor(config?: KarmaKitConfig, db?: DatabaseService, cache?: CacheService);
     /**
      * Track a user action and update their score accordingly
      */
@@ -24,15 +26,6 @@ export declare class KarmaKit extends EventEmitter {
         endTime?: number;
     }): Promise<KarmaEvent[]>;
     /**
-     * Get current leaderboard
-     */
-    getLeaderboard(): Promise<LeaderboardEntry[]>;
-    /**
-     * Apply score decay to all users
-     * Should be called periodically (e.g., daily)
-     */
-    applyScoreDecay(): Promise<void>;
-    /**
      * Reset rate limiting counters
      * Should be called periodically (e.g., every hour)
      */
@@ -40,7 +33,6 @@ export declare class KarmaKit extends EventEmitter {
     private createInitialUserScore;
     private calculateWeightedScore;
     private calculateTrustLevel;
-    private calculateDecayAmount;
     private updateActivityHistory;
     private updateEvents;
     close(): Promise<void>;
