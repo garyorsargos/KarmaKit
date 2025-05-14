@@ -1,6 +1,6 @@
 # KarmaKit
 
-KarmaKit is a flexible, extensible user reputation and trust system for Node.js applications. It tracks user actions, updates scores, manages trust levels, and provides event logging, rate limiting, and leaderboard features.
+KarmaKit is a flexible, extensible user reputation and trust system for Node.js applications. It tracks user actions, updates scores, manages trust levels, and provides event logging and rate limiting features.
 
 ## Features
 
@@ -8,7 +8,6 @@ KarmaKit is a flexible, extensible user reputation and trust system for Node.js 
 - **Trust Levels:** Define custom trust levels with score thresholds and action weights.
 - **Rate Limiting:** Prevent abuse by limiting the number of actions per user in a time window.
 - **Event Logging:** Log user actions and trust level changes for auditing and analytics.
-- **Leaderboard:** Display top users based on score, with configurable filters.
 - **API Endpoints:** RESTful API for interacting with user karma, trust levels, and history.
 
 ## Installation
@@ -122,12 +121,6 @@ const karmaKit = new KarmaKit({
     { name: 'Contributor', minScore: 2, actionWeight: 1.2, badge: '🎖️', privileges: ['basic_access', 'post'] },
     { name: 'Trusted', minScore: 5, actionWeight: 1.5, badge: '⭐', privileges: ['basic_access', 'post', 'vote'] }
   ],
-  leaderboard: {
-    size: 10,
-    timeWindow: 0,
-    includeInactive: true,
-    minActivity: 0
-  },
   eventLogging: {
     enabled: true,
     maxEvents: 1000,
@@ -146,9 +139,6 @@ await karmaKit.trackUserAction({
 // Get user score
 const userScore = await karmaKit.getUserScore('user123');
 
-// Get leaderboard
-const leaderboard = await karmaKit.getLeaderboard();
-
 // Get user events
 const events = await karmaKit.getUserEvents('user123', {
   type: 'action',
@@ -163,7 +153,6 @@ await karmaKit.close();
 
 - `GET /user/{userId}/karma` - Get user's karma score and trust level
 - `POST /user/{userId}/karma/action` - Record a new action
-- `GET /leaderboard` - Get the leaderboard
 - `PUT /user/{userId}/trust` - Update user's trust level
 - `GET /user/{userId}/history` - Get user's event history
 
@@ -182,7 +171,6 @@ await karmaKit.close();
 - **enableRateLimiting**: Enable/disable rate limiting
 - **rateLimit**: { maxActions, timeWindow } per user
 - **trustLevels**: Array of trust level configs (name, minScore, actionWeight, badge, privileges)
-- **leaderboard**: { size, timeWindow, includeInactive, minActivity }
 - **eventLogging**: { enabled, maxEvents, retentionPeriod }
 
 ## Running Tests
@@ -211,7 +199,7 @@ If you encounter issues, ensure your Node.js version matches the project's requi
 
 ## Final Notes
 
-- All decay-related functionality has been removed.
+- All leaderboard and score decay functionality has been removed.
 - Trust levels and scoring are fully customizable.
 - The system is extensible for additional features as needed.
 
