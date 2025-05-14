@@ -12,8 +12,12 @@
     "resolveJsonModule": true,
     "sourceMap": true,
     "lib": ["es2018", "dom"],
-    "rootDir": "./src"
+    "rootDir": "."
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+  "include": [
+    "src/**/*.ts",
+    "scripts/*.ts",
+    "src/**/*.test.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
 } 
