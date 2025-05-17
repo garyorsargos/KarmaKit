@@ -1,6 +1,6 @@
 {
   "name": "karma-kit",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
   "description": "A flexible and extensible karma/reputation system for Node.js applications",
   "main": "dist/index.js",
